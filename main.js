@@ -15,6 +15,7 @@ var isSeriesBrushed = [];
 var seriesCount = 300;
 var seriesLength = 100;
 var labels = [];
+let allData = [] // stores data in single flat array, rather than in an array of arrays
 var data = new Array(seriesCount);
 var dataImage = new Image;
 var dataImageStale = true;
@@ -674,7 +675,6 @@ function loadData()
 
 		var allTextLines = text.split(/\r\n|\n/);
 		var lines = [];
-		let allData = []
 		for (var i=0; i<allTextLines.length; i++) {
 			if (allTextLines[i].length===0) continue
 			var elems = allTextLines[i].split(',');
@@ -691,11 +691,15 @@ function loadData()
 			lines.push(tarr);
 		}
 		data = lines;
+		console.log("Series loaded: "+lines.length);
 		console.log("Min: "+dataMin+", max: "+dataMax);
 
 		// need to force numeric sort
+		console.log("Sorting")
 		allSortedData = allData.sort(function(a, b){return a-b});
 		allPercentiles = [];
+		console.log("Precomputing percentiles")
+		for(let i=allSortedData.length-1; i>=0; i--) allPercentiles[allSortedData[i]] = i/allSortedData.length
 
 		seriesCount = data.length;
 		seriesLength = data[0].length;
@@ -711,6 +715,7 @@ function loadData()
 			isSeriesBrushed[i] = false;
 		}
 
+		console.log('Drawing gatherplot')
 		context.clearRect(0, 0, canvas.width, canvas.height);
 		dataImageStale = true;
 		drawData();
@@ -720,7 +725,7 @@ function loadData()
 		dataImageStale = false;
 
 		drawMinimap();
-		drawHist([]); // empty argument because no selected series
+		// drawHist([]); // empty argument because no selected series
 		attributesLoaded = false;
 	}
 }
@@ -1035,7 +1040,7 @@ function drawHist(selectedSeries)
 	var overallData =
 	{
 		name: 'Overall (%)',
-		x: data.reduce(function(a, b) {return a.concat(b);}, []),
+		x: allData,
 		opacity: 0.75,
 		type: 'histogram',
 		histnorm: 'percent'
@@ -1266,32 +1271,7 @@ function explain()
    	document.getElementById('explainTabs').style.display="block";
    	document.getElementById('explainToggle').innerHTML = "Hide explanation";
 
-   	//console.table(selectedSeries);
    	drawHist(selectedSeries);
-   	//drawData();
-   	/*
-   	var testData = {
-		labels: ["January", "February", "March", "April", "May", "June", "July"],
-		datasets: [
-			{
-				label: "My First dataset",
-				fillColor: "rgba(220,220,220,0.5)",
-				strokeColor: "rgba(220,220,220,0.8)",
-				highlightFill: "rgba(220,220,220,0.75)",
-				highlightStroke: "rgba(220,220,220,1)",
-				data: [65, 59, 80, 81, 56, 55, 40]
-			},
-			{
-				label: "My Second dataset",
-				fillColor: "rgba(151,187,205,0.5)",
-				strokeColor: "rgba(151,187,205,0.8)",
-				highlightFill: "rgba(151,187,205,0.75)",
-				highlightStroke: "rgba(151,187,205,1)",
-				data: [28, 48, 40, 19, 86, 27, 90]
-			}
-		]
-	};
-	*/
 }
 
 function drawScatterTree(points)
@@ -1367,12 +1347,13 @@ function CSVToArray(csv)
 	var allTextLines = csv.split(/\r\n|\n/);
   	var lines = [];
   	for (var i=0; i<allTextLines.length; i++) {
-		  var elems = allTextLines[i].split(',');
-		  var tarr = [];
-		  for (var j=0; j<elems.length; j++) {
-			  tarr.push(elems[j]);
-		  }
-		  lines.push(tarr);
+  		if (allTextLines[i].length===0) continue
+		var elems = allTextLines[i].split(',');
+		var tarr = [];
+		for (var j=0; j<elems.length; j++) {
+			tarr.push(elems[j]);
+		}
+		lines.push(tarr);
   	}
   	return lines;
 }
