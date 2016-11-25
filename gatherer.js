@@ -1,5 +1,6 @@
-var distances;
-var distancePercentiles = [];
+var distances
+var precomputeDistances
+var lists = []
 
 function visualDistance(list1, list2)
 {	
@@ -78,114 +79,80 @@ function highPassBoundedDistance(list1, list2, bound)
 	return distance;
 }
 
-function allDistances(dictOfLists)
+function allDistances(lists)
 {
-	var distancesDict = {};
-	for(var key1 in dictOfLists)
-	{
-		//console.log(key1);
-		if(dictOfLists.hasOwnProperty(key1))
-			postMessage({"type":"distanceProgress","value":key1});
+	let distanceMatrix = [];
 
-		for(var key2 in dictOfLists)
-		{
-			// this check is necessary in js for some reason
-			if(dictOfLists.hasOwnProperty(key1) && dictOfLists.hasOwnProperty(key2))
-			{
-				if(key1 != key2 && !distancesDict.hasOwnProperty([key1,key2]) && !distancesDict.hasOwnProperty([key2,key1]))
-				{
-					//console.log("key1: "+key1);
-					//console.log("key2: "+key2);
-					//distancesDict[[key1,key2]] = visualDistance(dictOfLists[key1], dictOfLists[key2]);
-					//distancesDict[[key1,key2]] = boundedDistance(dictOfLists[key1], dictOfLists[key2],7);
-					// arbitrarily picked 7 as the bound since e^-7 <0.001
-					
-					distancesDict[[key1,key2]] = boundedDistance2(dictOfLists[key1], dictOfLists[key2],8);
-					//distancesDict[[key1,key2]] = highPassBoundedDistance(dictOfLists[key1], dictOfLists[key2], 5);
-					//distancesDict[[key1,key2]] = absolutePairwiseDistance(dictOfLists[key1], dictOfLists[key2]);
-				}
-			}
-				
+	for(let i=0; i<lists.length; i++) {
+		distanceMatrix[i] = []
+		for(let j=0; j<lists.length; j++) {
+			distanceMatrix[i][j] = 0
 		}
 	}
-	return distancesDict;
-}
 
-function cacheDistancePercentiles()
-{
-	var allDistancesList = [];
-	for (var key in distances) {
-	  if (distances.hasOwnProperty(key)) {
-	    allDistancesList.push(distances[key]);
-	  }
+	for(let i=0; i<lists.length; i++) {
+		postMessage({"type":"distanceProgress","value":i});
+
+		for(let j=i+1; j<lists.length; j++) {
+			const d = boundedDistance2(lists[i], lists[j],8)
+			distanceMatrix[i][j] = d
+			distanceMatrix[j][i] = d
+		}
 	}
-
-	console.log('Sorting distances...');
-	allDistancesList.sort(function(a, b){return a-b});
-	console.log('Done sorting.')
-
-	for (var key in distances) {
-	  if (distances.hasOwnProperty(key)) {
-	    if (!distancePercentiles.hasOwnProperty(key))
-	    {
-	    	distancePercentiles[key] = allDistancesList.indexOf(distances[key])/allDistancesList.length;
-	    }
-	  }
-	}
+	return distanceMatrix
 }
 
 // can make a really inefficient double-ended queue using javascript Array
-// functions, push = add to tail, unshift = add to head, pop = pop from tail, 
-// shift = pop from head
+// functions: push = add to tail, unshift = add to head, 
+// pop = pop from tail, shift = pop from head
 
 function recompose(lists)
 {	
+	console.log("Recomposing...")
 	var BIG_NUMBER = Number.MAX_VALUE;
-	var originalSize = Object.size(lists);
+	var originalSize = lists.length;
 	var totalDistance = 0;
-	//console.log("Full number of series: "+originalSize);
 	
-	var recomposed = [];
+	//var recomposed = [];
 	var labels = [];
 	
+	unallottedLabels = [];
+	for(let i=0; i<lists.length;i++) unallottedLabels[i] = i
+
+	postMessage({"type":"recomposeProgress","value":0});
 	// gets key with minimum value
-	var seed = [];
-	var currentMin = BIG_NUMBER;
-	for (var key in distances)
-	{
-		if (distances.hasOwnProperty(key))
-		{
-			var thisDistance = distances[key];
-			if(thisDistance<currentMin)
-			{ 
-				seed = key;
-				currentMin = thisDistance;
+	let seedL, seedR
+	let currentMin = BIG_NUMBER;
+	for(let i=0; i<unallottedLabels.length; i++) {
+		for(let j=i+1; j<unallottedLabels.length; j++) {
+			const d = distanceLookup(i,j)
+			if(d<currentMin) {
+				seedL = i
+				seedR = j
+				currentMin = d
 			}
 		}
 	}
+
 	totalDistance += currentMin;
 
-	var splitSeed = seed.split(","); //for some reason it is a string, not an array
-	seedL = splitSeed[0];
-	seedR = splitSeed[1];
-	
 	currentLeft = seedL;
 	currentRight = seedR;
 	
-	recomposed.push(lists[seedR]);
-	recomposed.unshift(lists[seedL]);
+	//recomposed.push(lists[seedR]);
+	//recomposed.unshift(lists[seedL]);
 	
 	labels.push(seedR);
 	labels.unshift(seedL);
 	
-	delete lists[seedL];
-	delete lists[seedR];
+	unallottedLabels.splice(unallottedLabels.indexOf(seedL),1);
+	unallottedLabels.splice(unallottedLabels.indexOf(seedR),1);
 	
-	console.log("Recomposing...");
 	//console.table(lists);
-	while(Object.size(lists)>0)
+	while(unallottedLabels.length>0)
 	{
-		var fractionRecomposeProgress = 1-(Object.size(lists)/originalSize);
+		//console.log("Size of list: "+lists.length)
+		var fractionRecomposeProgress = 1-(unallottedLabels.length/originalSize);
 		postMessage({"type":"recomposeProgress","value":fractionRecomposeProgress}); // will use the value field when this becomes complicated
 
 		var minKeyL = "NIL";
@@ -194,72 +161,144 @@ function recompose(lists)
 		var minDistanceL = BIG_NUMBER; 
 		var minDistanceR = BIG_NUMBER;
 		
-		for(k in lists)
-		{
-			if(!lists.hasOwnProperty(k)) continue;
-			
-			var combinedKeyL1 = [currentLeft,k];
-			var combinedKeyL2 = [k,currentLeft];
-			var combinedKeyR1 = [currentRight,k];
-			var combinedKeyR2 = [k,currentRight];
-			
-			if (distances.hasOwnProperty(combinedKeyL1))
-				distanceL = distances[combinedKeyL1];
-			else
-				distanceL = distances[combinedKeyL2];
-		
-			if (distances.hasOwnProperty(combinedKeyR1))
-				distanceR = distances[combinedKeyR1]
-			else
-				distanceR = distances[combinedKeyR2];
-			
-			if(distanceL<minDistanceL)
-			{
-				minKeyL = k;
-				minDistanceL = distanceL;
-				//console.log("Set minKeyL");
+		for(let i=0; i<unallottedLabels.length; i++) {
+			const l = unallottedLabels[i]
+
+			if(l!==currentLeft) {
+				const dL = distanceLookup(currentLeft,l)
+					if (dL < minDistanceL) {
+					minKeyL = l
+					minDistanceL = dL
+				}
 			}
-			
-			if(distanceR<minDistanceR)
-			{
-				minKeyR = k;
-				minDistanceR= distanceR;
-				//console.log("Set minKeyR");
+
+			if(l!==currentRight) {
+				const dR = distanceLookup(currentRight,l)
+				if (dR < minDistanceR) {
+					minKeyR = l
+					minDistanceR = dR
+				}
 			}
 		}
-		
+
 		if(minDistanceL < minDistanceR)
 		{
-			recomposed.unshift(lists[minKeyL]);
 			labels.unshift(minKeyL);
 			currentLeft = minKeyL;
-			delete lists[minKeyL];
+			unallottedLabels.splice(unallottedLabels.indexOf(minKeyL), 1);
 			totalDistance += minDistanceL;
 		}
 		else
 		{
-			recomposed.push(lists[minKeyR]);
 			labels.push(minKeyR);
 			currentRight = minKeyR;
-			delete lists[minKeyR];
+			unallottedLabels.splice(unallottedLabels.indexOf(minKeyR),1);
 			totalDistance += minDistanceR;
 		}
-		
-		/** DEBUGGING **
-		
-		console.log(Object.size(lists));
-		if(Object.size(lists)===8)
-		{
-			console.log(lists);
-			//return [recomposed, labels];
-		}
-		**************/
+		//console.log(minKeyL+ " "+minKeyR)
 	}
 	console.log("Finished gathering. Total distance was: "+totalDistance);
-
-	postMessage({"type":"result","value":[recomposed,labels]});
-	//return [recomposed,labels];
+	postMessage({"type":"labels","value":labels});
+	postMessage({"type":"finished"});
 }
+
+function recomposeImperfectSeed(lists)
+{	
+	console.log("Recomposing...")
+	var BIG_NUMBER = Number.MAX_VALUE;
+	var originalSize = lists.length;
+	var totalDistance = 0;
+	
+	//var recomposed = [];
+	var labels = [];
+	
+	unallottedLabels = [];
+	for(let i=0; i<lists.length;i++) unallottedLabels[i] = i
+
+	postMessage({"type":"recomposeProgress","value":0});
+	// gets key with minimum value
+	let seedL = 0
+	let seedR
+	let currentMin = BIG_NUMBER;
+	for(let i=0; i<unallottedLabels.length; i++) {
+			const l = unallottedLabels[i]
+			if(l!==seedL) {
+				const dL = distanceLookup(seedL,l)
+					if (dL < currentMin) {
+					seedR = l
+					currentMin = dL
+				}
+			}
+		}
+
+	totalDistance += currentMin;
+
+	currentLeft = seedL;
+	currentRight = seedR;
+	
+	//recomposed.push(lists[seedR]);
+	//recomposed.unshift(lists[seedL]);
+	
+	labels.push(seedR);
+	labels.unshift(seedL);
+	
+	unallottedLabels.splice(unallottedLabels.indexOf(seedL),1);
+	unallottedLabels.splice(unallottedLabels.indexOf(seedR),1);
+	
+	//console.table(lists);
+	while(unallottedLabels.length>0)
+	{
+		//console.log("Size of list: "+lists.length)
+		var fractionRecomposeProgress = 1-(unallottedLabels.length/originalSize);
+		postMessage({"type":"recomposeProgress","value":fractionRecomposeProgress}); // will use the value field when this becomes complicated
+
+		var minKeyL = "NIL";
+		var minKeyR = "NIL";
+		
+		var minDistanceL = BIG_NUMBER; 
+		var minDistanceR = BIG_NUMBER;
+		
+		for(let i=0; i<unallottedLabels.length; i++) {
+			const l = unallottedLabels[i]
+
+			if(l!==currentLeft) {
+				const dL = distanceLookup(currentLeft,l)
+					if (dL < minDistanceL) {
+					minKeyL = l
+					minDistanceL = dL
+				}
+			}
+
+			if(l!==currentRight) {
+				const dR = distanceLookup(currentRight,l)
+				if (dR < minDistanceR) {
+					minKeyR = l
+					minDistanceR = dR
+				}
+			}
+		}
+
+		if(minDistanceL < minDistanceR)
+		{
+			labels.unshift(minKeyL);
+			currentLeft = minKeyL;
+			unallottedLabels.splice(unallottedLabels.indexOf(minKeyL), 1);
+			totalDistance += minDistanceL;
+		}
+		else
+		{
+			labels.push(minKeyR);
+			currentRight = minKeyR;
+			unallottedLabels.splice(unallottedLabels.indexOf(minKeyR),1);
+			totalDistance += minDistanceR;
+		}
+		//console.log(minKeyL+ " "+minKeyR)
+	}
+	console.log("Finished gathering. Total distance was: "+totalDistance);
+	postMessage({"type":"labels","value":labels});
+	postMessage({"type":"finished"});
+}
+
 
 Object.size = function(obj) {
     var size = 0, key;
@@ -269,14 +308,14 @@ Object.size = function(obj) {
     return size;
 };
 
-/* THE ENTRYPOINT EVENT LISTENER WHICH GETS MESSAGES FROM THE MAIN THREAD */
+/* ENTRYPOINT EVENT LISTENER THAT GETS MESSAGES FROM MAIN THREAD */
 self.addEventListener('message',function(e) {
 	var listsAsOrdered = e.data.lists;
 	var strategy = e.data.strategy;
 	var labelOrder = e.data.labels;
+	precomputeDistances = e.data.precomputeDistances
 
 	console.log("Sanity check same number of labels as lists: "+(labelOrder.length===listsAsOrdered.length));
-	var lists = [];
 	for(var i=0;i<labelOrder.length;i++) 
 		lists[labelOrder[i]] = listsAsOrdered[i]; 
 
@@ -284,20 +323,16 @@ self.addEventListener('message',function(e) {
 	// thus, the for loop above reconstructs the original data series as loaded
 	// this allows us to reuse the distance matrix, because the keys always stay the same
 	// a bit convoluted but that's how it turned out, sorry
-
-	distances = e.data.distanceMatrix;
-	if(distances===undefined)
-	{
+	
+	if (precomputeDistances) {
 		console.log("Computing distances...");
 		distances = allDistances(lists);
-		postMessage({"type":"distanceMatrix","value":distances});
 	}
-
-	//console.log("Caching distance percentiles...");
-	//cacheDistancePercentiles();
-
+	
 	if(strategy==="genetic")
 		recomposeGeneticTSP(lists);
+	else if(strategy==="greedyImperfectSeed")
+		recomposeImperfectSeed(lists)
 	else if(strategy==="greedy")
 		recompose(lists);
 	else
@@ -389,44 +424,28 @@ function recomposeGeneticTSP(lists)
 
 	// bestValue should give you the same result as evaluate(best)
 
-	var recomposed = [];
+	//var recomposed = [];
 	var labels = [];
 
 	console.log("Sanity check to see if we've retained all series: "+(best.length===lists.length));
 	for(var i=0; i<best.length; i++) 
 	{
-		recomposed.push(lists[best[i]]);
+		//recomposed.push(lists[best[i]]);
 		labels.push(best[i]);
 	}
 
 	console.log("Finished gathering. Total distance was: "+bestValue+", acyclic: "+(bestValue-distanceLookup(best[0],best[best.length-1])));
-	postMessage({"type":"result","value":[recomposed,labels]});
-}
-
-function distanceLookupByPercentile(key1, key2) 
-{
-	if(distancePercentiles.hasOwnProperty([key1,key2]))
-		return distancePercentiles[[key1,key2]];
-	else if(distancePercentiles.hasOwnProperty([key2,key1]))
-		return distancePercentiles[[key2,key1]];
-	else
-	{
-		console.log('Error: no recorded distance between keys: '+ key1 + ', '+key2);
-		return -1;
-	}
+	//postMessage({"type":"result","value":[recomposed,labels]});
+	postMessage({"type":"labels","value":labels});
+	postMessage({"type":"finished"});
 }
 
 function distanceLookup(key1, key2) 
 {
-	if(distances.hasOwnProperty([key1,key2]))
-		return distances[[key1,key2]];
-	else if(distances.hasOwnProperty([key2,key1]))
-		return distances[[key2,key1]];
+	if (precomputeDistances)
+		return distances[key1][key2]
 	else
-	{
-		console.log('Error: no recorded distance between keys: '+ key1 + ', '+key2);
-		return -1;
-	}
+		return absolutePairwiseDistance(lists[key1],lists[key2])
 }
 
 function setBestValue() {

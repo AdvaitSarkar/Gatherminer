@@ -18,7 +18,6 @@ var labels = [];
 var data = new Array(seriesCount);
 var dataImage = new Image;
 var dataImageStale = true;
-var cachedDistances = undefined;
 
 var normalise = percentile; // points to the current normalisation function being used
 var colourmap = viridisColorString; // current colour map being used
@@ -30,7 +29,6 @@ var attributesLoaded = false;
 
 var dataMin = Number.MAX_VALUE;
 var dataMax = Number.MIN_VALUE;
-
 
 Array.prototype.unique = function() {
     var o = {}, i, l = this.length, r = [];
@@ -51,12 +49,6 @@ for(var i=0;i<data.length;i++)
 	isSeriesBrushed[i] = false;
 	for(var j=0; j<data[i].length; j++)
 	{
-		/*
-		if((i%2)==0)
-			data[i][j] = Math.abs(Math.sin(i/5)*Math.sin(j/5));
-		else
-			data[i][j] = 0.5;
-		*/
 		data[i][j] = Math.round((Math.random()*Math.abs(Math.sin(i/5)*Math.sin(j/5)))*100)/100;
 
 		if(data[i][j]<dataMin) dataMin = data[i][j];
@@ -78,22 +70,6 @@ attributesLoaded = true;
 // need to force numeric sort
 allSortedData = (data.reduce(function(a, b) {return a.concat(b);}, [])).sort(function(a, b){return a-b});
 allPercentiles = [];
-
-/*	OLD way of picking cell/datum size -- now just dictated by zoom selector
-
-	var rect = canvas.getBoundingClientRect();
-	// a max of seriesCount = canvas height and seriesLength = canvas width
-	// because of course there cannot be more than 1 datum per pixel... yet
-
-	var datumWidth = Math.floor((rect.right-rect.left)/seriesLength);
-	var datumHeight = Math.floor((rect.bottom-rect.top)/seriesCount);
-
-	// datumWidth and datumHeight are currently forced to be equal
-	// but this need not necessarily be the case
-	datumWidth = Math.min(datumWidth,datumHeight);
-	if(datumWidth<1) datumWidth = 1;
-	datumHeight = datumWidth;
-*/
 
 var zoomSelector = document.getElementById('zoomSelector');
 zoomSelector.addEventListener("change", function() {setDatumSize(zoomSelector.value)});
@@ -118,15 +94,16 @@ Plotly.newPlot('tab5', dataHist);
 // scroll event handler
 document.addEventListener('scroll', function(evt)
 {
-	//document.body.scrollTop
-	//console.log(document.body.scrollTop - $(canvas).offset().top);
-	if(document.body.scrollTop > $(canvas).offset().top-80)
+    	const canvasOffset   = canvas.getBoundingClientRect().top - document.body.getBoundingClientRect().top
+
+	if(document.body.scrollTop > canvasOffset-40)
 	{	// main canvas about to touch top of window
 		document.getElementById('tools').style.position = 'fixed';
 		document.getElementById('tools').style.top = '0.5em';
 
-		document.getElementById('minimapContainer').style.position = 'relative';
-		document.getElementById('minimapContainer').style.top = (document.body.scrollTop-20)+'px';
+		document.getElementById('minimapContainer').style.position = 'fixed';
+		document.getElementById('minimapContainer').style.top = '4em';
+		document.getElementById('myCanvas').style.marginLeft='7.5em'
 	}
 	else
 	{
@@ -136,13 +113,14 @@ document.addEventListener('scroll', function(evt)
 
 		document.getElementById('minimapContainer').style.position = 'relative';
 		document.getElementById('minimapContainer').style.top = '0px';
+		document.getElementById('myCanvas').style.marginLeft='0em'
 	}
 
-	// look out -- uses a jQuery function to do its job
-	var topmostVisiblePixel = document.body.scrollTop - $(canvas).offset().top;
+	var topmostVisiblePixel = document.body.scrollTop - canvasOffset;
 	var bottomVisiblePixel = Math.min(topmostVisiblePixel+window.innerHeight,canvas.height);
 	if(topmostVisiblePixel<0) topmostVisiblePixel = 0;
 
+  // draw minimap scroll thumb
 	minimapContext.clearRect(0,0,minimap.width,minimap.height);
 	drawMinimap();
 	minimapContext.beginPath();
@@ -162,8 +140,10 @@ document.addEventListener('scroll', function(evt)
 
 //drag event handler for minimap
 minimap.addEventListener('mousedown', function(mousedownEvent){
+
+	const canvasOffset   = canvas.getBoundingClientRect().top - document.body.getBoundingClientRect().top
 	var mousedownPos = getMousePos(minimap, mousedownEvent);
-	var topmostVisiblePixel = document.body.scrollTop - $(canvas).offset().top;
+	var topmostVisiblePixel = document.body.scrollTop - canvasOffset;
 	var bottomVisiblePixel = Math.min(topmostVisiblePixel+window.innerHeight,canvas.height);
 
 	// if the drag originates from within the minimap scroll 'thumb'
@@ -176,7 +156,7 @@ minimap.addEventListener('mousedown', function(mousedownEvent){
 			var pixelsFromThumbTop = mousedownPos.y - Math.round((topmostVisiblePixel/canvas.height)*minimap.height);
 			//console.log(yOffset);
 			window.scrollTo(0,
-				Math.round($(canvas).offset().top+(mousemovePos.y/minimap.height)*canvas.height)
+				Math.round(canvasOffset+(mousemovePos.y/minimap.height)*canvas.height)
 				-Math.round((pixelsFromThumbTop/minimap.height)*canvas.height));
 		};
 	}
@@ -199,8 +179,6 @@ minimap.addEventListener('mouseout', function(mousedownEvent){
 // mousemove event handler
 canvas.addEventListener('mousemove', function(evt) {
 	var mousePos = getMousePos(canvas, evt);
-	//var message = 'Mouse position: ' + mousePos.x + ',' + mousePos.y;
-	//writeMessage(canvas, message);
 
 	// note! the select mode has been retired, in favour of the new brushing options
 	if(currentMode()==='select' && mousedown)
@@ -431,52 +409,6 @@ for(var i=0;i<modeButtons.length;i++)
 	};
 }
 
-// old normalisation button change event handlers
-/*
-for(var i=0;i<normalisationButtons.length;i++) {
-
-	normalisationButtons[i].onclick = function(evt) {
-		var currentNormalisation = '';
-		for(var j=0;j<normalisationButtons.length;j++)	{
-			if(normalisationButtons[j].checked)
-				currentNormalisation = normalisationButtons[j].value;
-		}
-
-		if (currentNormalisation === 'percentile')
-			normalise = percentile;
-		else
-			normalise = meanrange;
-
-		dataImageStale = true;
-		drawData();
-	};
-}
-*/
-
-// old colourmap button change event handlers
-/*
-for(var i=0;i<colourmapButtons.length;i++) {
-
-	colourmapButtons[i].onclick = function(evt) {
-		var currentColourMap = '';
-		for(var j=0;j<colourmapButtons.length;j++)	{
-			if(colourmapButtons[j].checked)
-				currentColourMap = colourmapButtons[j].value;
-		}
-
-		if (currentColourMap === 'grayscale')
-			colourmap = getGrayscaleColorString;
-		else if (currentColourMap === 'redyellowgreen')
-			colourmap = getRedYellowGreenColorString;
-		else
-			colourmap = rainbowColorString;
-
-		dataImageStale = true;
-		drawData();
-	};
-}
-*/
-
 var normalisationSelector = document.getElementById('normalisationSelector');
 normalisationSelector.addEventListener("change", function() {
 	currentNormalisation = normalisationSelector.value;
@@ -510,19 +442,25 @@ colourmapSelector.addEventListener("change", function() {
 var gatheringStrategySelector = document.getElementById('gatheringStrategySelector');
 
 // sets up explain tabs
-jQuery(document).ready(function() {
-	jQuery('.tabs .tab-links a').on('click', function(e)  {
-		var currentAttrValue = jQuery(this).attr('href');
+window.onload = function() {
+	const tabs = document.querySelectorAll('.tabs .tab-links a')
+	for(let i=0; i<tabs.length; i++) {
+		tabs[i].onclick = function(e)  {
+			var currentAttrValue = event.target.getAttribute("href")
+			console.log(currentAttrValue)
 
-		// Show/Hide Tabs
-		jQuery('.tabs ' + currentAttrValue).show().siblings().hide();
+			// Show/Hide Tabs
+			document.querySelectorAll('.tab').forEach(function(t) {t.style.display = "none"})
+			document.querySelector('.tabs ' + currentAttrValue).style.display = "block"	
 
-		// Change/remove current tab to active
-		jQuery(this).parent('li').addClass('active').siblings().removeClass('active');
+			// Change/remove current tab to active
+			document.querySelectorAll('.tab-links li').forEach(function(t) {t.classList.remove('active')})
+			event.target.parentNode.classList.add('active')
 
-		e.preventDefault();
-	});
-});
+			e.preventDefault();
+		}
+	}
+}
 
 // START FUNCTION DEFINITIONS
 function writeMessage(canvas, message)
@@ -574,14 +512,17 @@ function viridisColorString(value) {
 	var green;
 	var blue;
 
-	var index = Math.round(value*(viridis.length-1));
+	var index = Math.ceil(value*(viridis.length-1));
 
 	try {
 		red = Math.round(viridis[index][0]*255);
 		green = Math.round(viridis[index][1]*255);
 		blue = Math.round(viridis[index][2]*255);
 	}
-	catch(e) {console.log('rogue index is '+index);}
+	catch(e) {
+    // currently do nothing. Was getting a bunch of 0 and -1, should fix that at some point
+    //console.log('rogue index is '+index);
+  }
 
 	return "rgb("+red+","+green+","+blue+")";
 }
@@ -591,7 +532,6 @@ function percentile(value)
 	if (allPercentiles[value] === undefined)
 	{
 		allPercentiles[value] = (allSortedData.indexOf(value)/allSortedData.length);
-		//console.log('recorded percentile of '+value+': '+allPercentiles[value]);
 	}
 
 	return allPercentiles[value];
@@ -734,43 +674,34 @@ function loadData()
 
 		var allTextLines = text.split(/\r\n|\n/);
 		var lines = [];
+		let allData = []
 		for (var i=0; i<allTextLines.length; i++) {
-			  var elems = allTextLines[i].split(',');
-			  var tarr = [];
-			  for (var j=0; j<elems.length; j++) {
-			  	  var floatDatum = parseFloat(elems[j]);
-				  tarr.push(floatDatum);
-				  // need to do compare on the parsed version because otherwise it does a fucking string comparison
-				  // silently, which creates a fucking mess
-				  if(floatDatum<=dataMin) dataMin = floatDatum;
-				  if(floatDatum>=dataMax) dataMax = floatDatum;
-			  }
-			  lines.push(tarr);
+			if (allTextLines[i].length===0) continue
+			var elems = allTextLines[i].split(',');
+			var tarr = [];
+			for (var j=0; j<elems.length; j++) {
+				var floatDatum = parseFloat(elems[j]);
+				tarr.push(floatDatum);
+				allData.push(floatDatum)
+			  	// need to parse before comparing because otherwise it does a fucking string comparison
+			  	// silently, which creates a fucking mess
+			  	if(floatDatum<=dataMin) dataMin = floatDatum;
+			  	if(floatDatum>=dataMax) dataMax = floatDatum;
+			}
+			lines.push(tarr);
 		}
 		data = lines;
 		console.log("Min: "+dataMin+", max: "+dataMax);
 
 		// need to force numeric sort
-		allSortedData = (data.reduce(function(a, b) {return a.concat(b);}, [])).sort(function(a, b){return a-b});
+		allSortedData = allData.sort(function(a, b){return a-b});
 		allPercentiles = [];
-		cachedDistances = undefined;
 
 		seriesCount = data.length;
 		seriesLength = data[0].length;
 
-		/* Just allow size to be dictated by zoom selector
-
-			datumWidth = Math.floor((rect.right-rect.left)/seriesLength);
-			datumHeight = Math.floor((rect.bottom-rect.top)/seriesCount);
-			datumWidth = Math.min(datumWidth,datumHeight);
-			if(datumWidth<1) datumWidth = 1;
-			datumHeight = datumWidth;
-		*/
 		canvas.height = datumHeight * seriesCount;
 		canvas.width  = datumWidth  * seriesLength;
-
-		//console.log("datumWidth is "+datumWidth);
-		//console.log("datumHidth is "+datumHeight);
 
 		labels = [];
 		isSeriesBrushed = [];
@@ -829,10 +760,8 @@ function loadAttributes()
 			}
 		}
 
-		//context.clearRect(0, 0, canvas.width, canvas.height);
-		//drawData();
 		attributesLoaded = true;
-		//alert('Attributes loaded successfully');
+		console.log('Attributes loaded successfully');
 	}
 }
 
@@ -844,8 +773,8 @@ function gather()
 
 	gatherWorker.postMessage({"lists":data,
 							  "strategy":gatheringStrategySelector.value,
-							  "distanceMatrix":cachedDistances,
-							  "labels":labels
+							  "labels":labels,
+							  "precomputeDistances": document.getElementById("precomputeDistancesCheckbox").checked
 							});
 
 	gatherWorker.addEventListener('message', function(e) {
@@ -853,38 +782,25 @@ function gather()
 		{
 			progressDisplay.innerHTML = 'Computing distances: '+ Math.round((e.data.value*100)/seriesCount)+'%';
 		}
-		else if(e.data.type==='distanceMatrix')
-		{
-			cachedDistances = e.data.value;
-		}
 		else if(e.data.type==='recomposeProgress')
 		{
 			if(e.data.value==='none')
 				progressDisplay.innerHTML = 'Recomposing...';
 			else
-				progressDisplay.innerHTML = 'Recomposing: '+ Math.round(e.data.value*100)+'%';;
+				progressDisplay.innerHTML = 'Recomposing: '+ Math.round(e.data.value*100)+'%';
 		}
-		/* won't use this for now
-		else if(e.data.type==='intermediate')
+		else if(e.data.type==='labels')
 		{
-			var recomposed = e.data.value;
-			//only update if you're sure the recompose algorithm has sent back all the data!
-			if(recomposed[0].length===data.length)
-			{
-				data = recomposed[0];
-				labels = recomposed[1];
-				dataImageStale = true;
-				drawData();
-			}
+			labels = e.data.value
+			console.log("Received labels. Reordering data...")
+			let reorderedData = []
+			for(let i=0; i<data.length; i++) reorderedData[i] = data[labels[i]]
+			data = reorderedData
 		}
-		*/
-		else if(e.data.type==='result')
+		else if(e.data.type==='finished')
 		{
 			progressDisplay.innerHTML = "Done";
 			progressDisplay.style.display="none";
-			var recomposed = e.data.value;
-			data = recomposed[0];
-			labels = recomposed[1];
 			dataImageStale = true;
 			drawData();
 		}
@@ -1282,7 +1198,12 @@ function explain()
 	var dataForCharts = {};
 
 	// create necessary canvas elements and prepare dataForCharts
-	$('.chart').remove(); // removes all existing nodes with class 'chart'
+
+	// removes all existing nodes with class 'chart'
+	// http://stackoverflow.com/questions/10842471/remove-all-elements-of-a-certain-class-with-javascript
+	let chartElements = document.getElementsByClassName('chart');
+	while(chartElements[0]) chartElements[0].parentNode.removeChild(chartElements[0])
+
 	for(var i=0; i<features.length; i++)
 	{
 		var f = features[i];
