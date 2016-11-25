@@ -315,6 +315,8 @@ self.addEventListener('message',function(e) {
 	var labelOrder = e.data.labels;
 	precomputeDistances = e.data.precomputeDistances
 
+	/* there's a bug where gathering the same dataset more than once returns complete garbage orderings */
+	/* I have a feeling the answer is somewhere here but I cba to fix it for now */
 	console.log("Sanity check same number of labels as lists: "+(labelOrder.length===listsAsOrdered.length));
 	for(var i=0;i<labelOrder.length;i++) 
 		lists[labelOrder[i]] = listsAsOrdered[i]; 
@@ -688,6 +690,7 @@ Array.prototype.next = function (index) {
     return this[index+1];
   }
 }
+
 Array.prototype.previous = function (index) {
   if(index === 0) {
     return this[this.length-1];

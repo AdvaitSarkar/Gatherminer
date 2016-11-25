@@ -12,7 +12,7 @@ var mousedown = false;
 var shiftFrom= 0;
 var isSeriesBrushed = [];
 
-var seriesCount = 300;
+var seriesCount = 100;
 var seriesLength = 100;
 var labels = [];
 let allData = [] // stores data in single flat array, rather than in an array of arrays
@@ -71,6 +71,7 @@ attributesLoaded = true;
 // need to force numeric sort
 allSortedData = (data.reduce(function(a, b) {return a.concat(b);}, [])).sort(function(a, b){return a-b});
 allPercentiles = [];
+for(let i=allSortedData.length-1; i>=0; i--) allPercentiles[allSortedData[i]] = i/allSortedData.length
 
 var zoomSelector = document.getElementById('zoomSelector');
 zoomSelector.addEventListener("change", function() {setDatumSize(zoomSelector.value)});
@@ -80,17 +81,6 @@ datumHeight = datumWidth;
 canvas.width = datumWidth*seriesLength;
 canvas.height = datumHeight*seriesCount;
 drawData();
-
-/*
-var dataHist = [
-  {
-    x: data.reduce(function(a, b) {return a.concat(b);}, []),
-    colorscale: 'Bluered',
-    type: 'histogram'
-  }
-];
-Plotly.newPlot('tab5', dataHist);
-*/
 
 // scroll event handler
 document.addEventListener('scroll', function(evt)
@@ -437,6 +427,7 @@ colourmapSelector.addEventListener("change", function() {
 			colourmap = rainbowColorString;
 
 		dataImageStale = true;
+		colourCache = []
 		drawData();
 });
 
@@ -509,11 +500,11 @@ function rainbowColorString(value) {
 }
 
 function viridisColorString(value) {
+	const index = Math.ceil(value*(viridis.length-1));
+
 	var red;
 	var green;
 	var blue;
-
-	var index = Math.ceil(value*(viridis.length-1));
 
 	try {
 		red = Math.round(viridis[index][0]*255);
@@ -521,11 +512,11 @@ function viridisColorString(value) {
 		blue = Math.round(viridis[index][2]*255);
 	}
 	catch(e) {
-    // currently do nothing. Was getting a bunch of 0 and -1, should fix that at some point
-    //console.log('rogue index is '+index);
-  }
+  			// currently do nothing. Was getting a bunch of 0 and -1, should fix that at some point
+  			//console.log('rogue index is '+index);
+		}
 
-	return "rgb("+red+","+green+","+blue+")";
+  	return "rgb("+red+","+green+","+blue+")";
 }
 
 function percentile(value)
