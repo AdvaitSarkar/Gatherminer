@@ -87,7 +87,8 @@ document.addEventListener('scroll', function(evt)
 {
     	const canvasOffset   = canvas.getBoundingClientRect().top - document.body.getBoundingClientRect().top
 
-	if(document.body.scrollTop > canvasOffset-40)
+	//if(document.body.scrollTop > canvasOffset-40) //document.body.scrollTop is deprecated
+	if(document.documentElement.scrollTop > canvasOffset-40) 
 	{	// main canvas about to touch top of window
 		document.getElementById('tools').style.position = 'fixed';
 		document.getElementById('tools').style.top = '0.5em';
@@ -107,7 +108,7 @@ document.addEventListener('scroll', function(evt)
 		document.getElementById('myCanvas').style.marginLeft='0em'
 	}
 
-	var topmostVisiblePixel = document.body.scrollTop - canvasOffset;
+	var topmostVisiblePixel = document.documentElement.scrollTop - canvasOffset;
 	var bottomVisiblePixel = Math.min(topmostVisiblePixel+window.innerHeight,canvas.height);
 	if(topmostVisiblePixel<0) topmostVisiblePixel = 0;
 
@@ -134,7 +135,7 @@ minimap.addEventListener('mousedown', function(mousedownEvent){
 
 	const canvasOffset   = canvas.getBoundingClientRect().top - document.body.getBoundingClientRect().top
 	var mousedownPos = getMousePos(minimap, mousedownEvent);
-	var topmostVisiblePixel = document.body.scrollTop - canvasOffset;
+	var topmostVisiblePixel = document.documentElement.scrollTop - canvasOffset;
 	var bottomVisiblePixel = Math.min(topmostVisiblePixel+window.innerHeight,canvas.height);
 
 	// if the drag originates from within the minimap scroll 'thumb'
@@ -848,7 +849,7 @@ function drawData()
 		//context.putImageData(dataImage,0,0);
 
 		context.drawImage(dataImage,0,0);
-		//drawMinimap();
+		drawMinimap();
 	}
 }
 
