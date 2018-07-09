@@ -1,6 +1,12 @@
 # Gatherminer
-An interactive visual tool for time series analysis
+An interactive visual tool for time series analysis.
 
+Publication: 
+Visual discovery and model-driven explanation of time series patterns
+Advait Sarkar, Martin Spott, Alan F. Blackwell, Mateja Jamnik
+2016 IEEE Symposium on Visual Languages and Human-Centric Computing (VL/HCC) (pp. 78–86)
+http://dx.doi.org/10.1109/VLHCC.2016.7739668
+http://ieeexplore.ieee.org/document/7739668/
 -------------------
 
 Last updated April 2017, for v0.7
